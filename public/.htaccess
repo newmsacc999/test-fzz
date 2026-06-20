@@ -1,0 +1,8 @@
+# SPA routing for Hostinger (Apache).
+# Serves real files/dirs as-is (so /payments/*.php still works), and rewrites
+# all other paths to index.html so React Router deep links survive a refresh.
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+RewriteRule ^ index.html [L]

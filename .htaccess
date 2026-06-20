@@ -1,0 +1,11 @@
+# Hostinger PHP backend (Cashfree + Razorpay).
+# Upload this alongside the .php files, load_env.php, vendor/ and .env in the
+# SAME folder on Hostinger. (The Vercel SPA does NOT use this file.)
+
+# Don't list directory contents.
+Options -Indexes
+
+# Never serve the secrets file over the web.
+<Files ".env">
+  Require all denied
+</Files>
