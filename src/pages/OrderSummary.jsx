@@ -13,7 +13,6 @@ const OrderSummary = () => {
 
   // ---------- DISABLE ZOOM & PINCH (viewport + JavaScript) ----------
   useEffect(() => {
-    // --- Viewport meta (fallback) ---
     const viewportMeta = document.querySelector('meta[name="viewport"]');
     let originalContent = "";
 
@@ -31,9 +30,7 @@ const OrderSummary = () => {
       document.head.appendChild(meta);
     }
 
-    // --- JavaScript prevention for iOS ---
     const preventPinch = (e) => {
-      // Prevent only multi‑touch gestures (allow single‑finger scroll)
       if (e.touches && e.touches.length > 1) {
         e.preventDefault();
       }
@@ -49,7 +46,6 @@ const OrderSummary = () => {
     document.addEventListener("gestureend", preventGesture);
 
     return () => {
-      // Restore viewport
       if (viewportMeta) {
         viewportMeta.setAttribute("content", originalContent);
       } else {
@@ -57,7 +53,6 @@ const OrderSummary = () => {
         if (createdMeta) createdMeta.remove();
       }
 
-      // Remove listeners
       document.removeEventListener("touchmove", preventPinch);
       document.removeEventListener("gesturestart", preventGesture);
       document.removeEventListener("gesturechange", preventGesture);
@@ -101,12 +96,54 @@ const OrderSummary = () => {
     setCartItems(updatedItems);
   };
 
+  // ---------- COMPUTED VALUES (used for tracking & UI) ----------
+  const totalQuantity = cartItems.reduce(
+    (sum, item) => sum + (Number(item.qty) || 1),
+    0
+  );
+  const totalMRP = cartItems.reduce(
+    (sum, item) => sum + (Number(item.mrp) || 0) * (Number(item.qty) || 1),
+    0
+  );
+  const subtotal = cartItems.reduce(
+    (sum, item) =>
+      sum + (Number(item.selling_price) || 0) * (Number(item.qty) || 1),
+    0
+  );
+  const discountAmount = totalMRP - subtotal;
+  const totalAmount = subtotal + donationAmount;
+  // --------------------------------------------------------------
+
+  // ---------- HANDLE CONTINUE WITH MANUAL META PIXEL ----------
   const handleContinue = async () => {
     if (cartItems.length === 0) {
       navigate("/");
       return;
     }
     if (processing) return;
+
+    // --- MANUAL Meta Pixel (InitiateCheckout) ---
+    try {
+      if (typeof window.fbq === "function") {
+        const contents = cartItems.map((item) => ({
+          id: item.productId || item.id || item.cartItemId,
+          quantity: Number(item.qty) || 1,
+          item_price: Number(item.selling_price) || 0,
+        }));
+
+        window.fbq("track", "InitiateCheckout", {
+          value: totalAmount,          // subtotal + donation
+          currency: "INR",
+          num_items: totalQuantity,
+          contents: contents,
+          donation: donationAmount,    // optional extra parameter
+        });
+      }
+    } catch (e) {
+      // Silently ignore tracking errors – they must not block checkout
+      console.warn("Meta Pixel tracking error:", e);
+    }
+    // ------------------------------------------------
 
     localStorage.setItem("checkout_cart", JSON.stringify(cartItems));
 
@@ -129,6 +166,7 @@ const OrderSummary = () => {
       setProcessing(false);
     }
   };
+  // --------------------------------------------------------------
 
   const handleVipClick = () => {
     toast("VIP membership isn't part of this demo.", { icon: "ℹ️" });
@@ -169,20 +207,6 @@ const OrderSummary = () => {
     );
   }
 
-  const totalQuantity = cartItems.reduce(
-    (sum, item) => sum + (Number(item.qty) || 1),
-    0,
-  );
-  const totalMRP = cartItems.reduce(
-    (sum, item) => sum + (Number(item.mrp) || 0) * (Number(item.qty) || 1),
-    0,
-  );
-  const subtotal = cartItems.reduce(
-    (sum, item) => sum + (Number(item.selling_price) || 0) * (Number(item.qty) || 1),
-    0,
-  );
-  const discountAmount = totalMRP - subtotal;
-  const totalAmount = subtotal + donationAmount;
   const firstProduct = cartItems[0] || null;
   const discountPercent = totalMRP ? Math.round((discountAmount / totalMRP) * 100) : 0;
 
