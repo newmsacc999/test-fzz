@@ -52,15 +52,14 @@ const OrderSummary = () => {
         const createdMeta = document.querySelector('meta[name="viewport"]');
         if (createdMeta) createdMeta.remove();
       }
-
       document.removeEventListener("touchmove", preventPinch);
       document.removeEventListener("gesturestart", preventGesture);
       document.removeEventListener("gesturechange", preventGesture);
       document.removeEventListener("gestureend", preventGesture);
     };
   }, []);
-  // ------------------------------------------------------------------
 
+  // ---------- LOAD CART & ADDRESS ----------
   useEffect(() => {
     localStorage.removeItem("selected_verient");
     setCartItems(cartService.getCartItems());
@@ -79,6 +78,7 @@ const OrderSummary = () => {
     };
   }, []);
 
+  // ---------- CART ACTIONS ----------
   const handleChangeAddress = () => {
     navigate("/address");
   };
@@ -96,7 +96,7 @@ const OrderSummary = () => {
     setCartItems(updatedItems);
   };
 
-  // ---------- COMPUTED VALUES (used for tracking & UI) ----------
+  // ---------- COMPUTED VALUES ----------
   const totalQuantity = cartItems.reduce(
     (sum, item) => sum + (Number(item.qty) || 1),
     0
@@ -112,7 +112,6 @@ const OrderSummary = () => {
   );
   const discountAmount = totalMRP - subtotal;
   const totalAmount = subtotal + donationAmount;
-  // --------------------------------------------------------------
 
   // ---------- HANDLE CONTINUE WITH MANUAL META PIXEL ----------
   const handleContinue = async () => {
@@ -122,29 +121,45 @@ const OrderSummary = () => {
     }
     if (processing) return;
 
-    // --- MANUAL Meta Pixel (InitiateCheckout) ---
+    // --- Build product contents array ---
+    const contents = cartItems.map((item) => ({
+      id: item.productId || item.id || item.cartItemId,
+      quantity: Number(item.qty) || 1,
+      item_price: Number(item.selling_price) || 0,
+    }));
+
+    // --- 1) InitiateCheckout (manual) ---
     try {
       if (typeof window.fbq === "function") {
-        const contents = cartItems.map((item) => ({
-          id: item.productId || item.id || item.cartItemId,
-          quantity: Number(item.qty) || 1,
-          item_price: Number(item.selling_price) || 0,
-        }));
-
         window.fbq("track", "InitiateCheckout", {
-          value: totalAmount,          // subtotal + donation
+          value: totalAmount,
           currency: "INR",
           num_items: totalQuantity,
           contents: contents,
-          donation: donationAmount,    // optional extra parameter
+          donation: donationAmount,
         });
       }
     } catch (e) {
-      // Silently ignore tracking errors – they must not block checkout
-      console.warn("Meta Pixel tracking error:", e);
+      console.warn("InitiateCheckout tracking error:", e);
     }
-    // ------------------------------------------------
 
+    // --- 2) Purchase (manual - fires on button click) ---
+    try {
+      if (typeof window.fbq === "function") {
+        window.fbq("track", "Purchase", {
+          value: totalAmount,
+          currency: "INR",
+          num_items: totalQuantity,
+          contents: contents,
+          donation: donationAmount,
+          order_id: Date.now().toString(), // simple unique ID for deduplication
+        });
+      }
+    } catch (e) {
+      console.warn("Purchase tracking error:", e);
+    }
+
+    // --- Proceed with checkout ---
     localStorage.setItem("checkout_cart", JSON.stringify(cartItems));
 
     const amount = cartItems.reduce(
@@ -166,22 +181,12 @@ const OrderSummary = () => {
       setProcessing(false);
     }
   };
-  // --------------------------------------------------------------
 
   const handleVipClick = () => {
     toast("VIP membership isn't part of this demo.", { icon: "ℹ️" });
   };
 
-  const getVariantDetailString = () => {
-    const item = cartItems[0];
-    if (!item) return "";
-    let parts = [];
-    if (item.color) parts.push(item.color);
-    if (item.size) parts.push(`(${item.size})`);
-    if (item.storage) parts.push(`(${item.storage})`);
-    return parts.join(" ");
-  };
-
+  // ---------- RENDER ----------
   if (!address) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -207,7 +212,6 @@ const OrderSummary = () => {
     );
   }
 
-  const firstProduct = cartItems[0] || null;
   const discountPercent = totalMRP ? Math.round((discountAmount / totalMRP) * 100) : 0;
 
   return (
